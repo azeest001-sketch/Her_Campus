@@ -4,8 +4,8 @@ Shared Flutter project for the team.
 
 ## Important files
 
-- `lib/main.dart` — app starting point (everyone runs from here)
-- `pubspec.yaml` — Flutter project + dependencies
+- `lib/main.dart` - app starting point (everyone runs from here)
+- `pubspec.yaml` - Flutter project + dependencies
 
 ## Folders
 
@@ -32,4 +32,4 @@ flutter run
 3. Add only YOUR files
 4. Commit, push, open a Pull Request into `main`
 
-Copy `.env.example` to `.env` locally and fill secrets — never commit `.env`.
+Copy `.env.example` to `.env` locally and fill secrets - never commit `.env`.
