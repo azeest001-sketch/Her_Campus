@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'screens/splash_screen.dart';
+import 'theme/app_theme.dart';
+
 void main() {
   runApp(const HerCampusApp());
 }
 
-/// App entry point. Teammates can grow this as screens are added.
+/// App entry — starts with the branded opening animation.
 class HerCampusApp extends StatelessWidget {
   const HerCampusApp({super.key});
 
@@ -13,11 +16,8 @@ class HerCampusApp extends StatelessWidget {
     return MaterialApp(
       title: 'Her Campus',
       debugShowCheckedModeBanner: false,
-      home: const Scaffold(
-        body: Center(
-          child: Text('Her Campus'),
-        ),
-      ),
+      theme: AppTheme.light,
+      home: const SplashScreen(),
     );
   }
 }
