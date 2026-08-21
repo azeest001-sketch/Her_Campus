@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
+import 'student_dashboard.dart';
 
 /// Dark glass login — backend hooks stay in [AuthService].
 class LoginScreen extends StatefulWidget {
@@ -237,7 +238,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                 SizedBox(
                                   height: 54,
                                   child: ElevatedButton(
-                                    onPressed: _loading ? null : _submit,
+                                    onPressed: _loading
+                                        ? null
+                                        : () async {
+                                            await _submit();
+                                            if (!mounted || _isAdmin) return;
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const StudentDashboardScreen(),
+                                              ),
+                                            );
+                                          },
                                     child: _loading
                                         ? SizedBox(
                                             width: 22,
