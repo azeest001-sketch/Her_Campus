@@ -2,20 +2,51 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+/// Soft watercolor ribbon palette for [CampusBackdrop].
+enum CampusBackdropTone {
+  /// Default pink / purple / blue campus look.
+  campus,
+
+  /// Admin blue / teal look.
+  admin,
+}
+
 /// Airy white backdrop with asymmetric watercolor-light ribbons.
 class CampusBackdrop extends StatelessWidget {
-  const CampusBackdrop({super.key, required this.child, this.roleTint});
+  const CampusBackdrop({
+    super.key,
+    required this.child,
+    this.roleTint,
+    this.tone = CampusBackdropTone.campus,
+  });
 
   final Widget child;
   final Color? roleTint;
+  final CampusBackdropTone tone;
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin = tone == CampusBackdropTone.admin;
     return Stack(
       fit: StackFit.expand,
       children: [
-        const ColoredBox(color: Color(0xFFFDFBFF)),
-        const CustomPaint(painter: _RibbonPainter()),
+        ColoredBox(
+          color: isAdmin ? const Color(0xFFF3FAFC) : const Color(0xFFFDFBFF),
+        ),
+        CustomPaint(painter: _RibbonPainter(tone: tone)),
+        if (roleTint != null)
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(-0.7, -0.85),
+                radius: 1.15,
+                colors: [
+                  roleTint!.withValues(alpha: 0.14),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
         // A very light paper veil keeps content crisp while colors show.
         ColoredBox(color: Colors.white.withValues(alpha: 0.10)),
         child,
@@ -25,7 +56,9 @@ class CampusBackdrop extends StatelessWidget {
 }
 
 class _RibbonPainter extends CustomPainter {
-  const _RibbonPainter();
+  const _RibbonPainter({required this.tone});
+
+  final CampusBackdropTone tone;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -44,6 +77,91 @@ class _RibbonPainter extends CustomPainter {
           ..strokeCap = StrokeCap.round
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
       );
+    }
+
+    if (tone == CampusBackdropTone.admin) {
+      // Soft blue sweep from the upper-left.
+      ribbon(
+        path: Path()
+          ..moveTo(-size.width * .25, size.height * .02)
+          ..cubicTo(
+            size.width * .18,
+            size.height * .03,
+            size.width * .06,
+            size.height * .35,
+            size.width * .45,
+            size.height * .43,
+          ),
+        color: const Color(0xFF7FC0FF).withValues(alpha: .70),
+        width: size.width * .22,
+        blur: 38,
+      );
+
+      // Teal ribbon across the mid/lower diagonal.
+      ribbon(
+        path: Path()
+          ..moveTo(size.width * 1.18, -size.height * .05)
+          ..cubicTo(
+            size.width * .72,
+            size.height * .13,
+            size.width * .92,
+            size.height * .43,
+            size.width * .42,
+            size.height * .60,
+          )
+          ..cubicTo(
+            size.width * .18,
+            size.height * .69,
+            size.width * .30,
+            size.height * .88,
+            -size.width * .12,
+            size.height * 1.02,
+          ),
+        color: const Color(0xFF5BC4BB).withValues(alpha: .66),
+        width: size.width * .18,
+        blur: 34,
+      );
+
+      // Deeper blue accent arc.
+      ribbon(
+        path: Path()
+          ..moveTo(-size.width * .12, size.height * .78)
+          ..cubicTo(
+            size.width * .28,
+            size.height * .64,
+            size.width * .48,
+            size.height * .86,
+            size.width * .72,
+            size.height * .63,
+          )
+          ..cubicTo(
+            size.width * .86,
+            size.height * .50,
+            size.width * .88,
+            size.height * .26,
+            size.width * 1.12,
+            size.height * .20,
+          ),
+        color: const Color(0xFF4F91DB).withValues(alpha: .58),
+        width: size.width * .10,
+        blur: 27,
+      );
+
+      // Soft teal wash near the bottom-right.
+      ribbon(
+        path: Path()
+          ..moveTo(size.width * .58, size.height * 1.08)
+          ..quadraticBezierTo(
+            size.width * .74,
+            size.height * .78,
+            size.width * 1.10,
+            size.height * .84,
+          ),
+        color: const Color(0xFF9AE5DE).withValues(alpha: .55),
+        width: size.width * .14,
+        blur: 32,
+      );
+      return;
     }
 
     // Pink sweep entering from the upper-left and bending toward center.
@@ -130,7 +248,8 @@ class _RibbonPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RibbonPainter oldDelegate) =>
+      oldDelegate.tone != tone;
 }
 
 /// Bright frosted glass panel — thin white edge like the reference.
