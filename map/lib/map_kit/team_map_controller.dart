@@ -369,6 +369,47 @@ class TeamMapController {
     }
   }
 
+  /// Soft heat blob at [position] (crowd density). Radius is in density units.
+  Future<void> addHeatCircle({
+    required String id,
+    required LatLng position,
+    required String colorHex,
+    double radius = 28,
+    double opacity = 0.55,
+    double strokeWidth = 2,
+  }) async {
+    await removeHeatCircle(id);
+    final circle = await _map.addCircle(
+      CircleOptions(
+        geometry: position,
+        circleRadius: radius,
+        circleColor: colorHex,
+        circleOpacity: opacity,
+        circleStrokeWidth: strokeWidth,
+        circleStrokeColor: colorHex,
+        circleStrokeOpacity: 0.95,
+      ),
+    );
+    _circles[id] = circle;
+  }
+
+  Future<void> removeHeatCircle(String id) async {
+    final circle = _circles.remove(id);
+    if (circle == null) return;
+    try {
+      await _map.removeCircle(circle);
+    } catch (error) {
+      debugPrint('removeHeatCircle($id) ignored: $error');
+    }
+  }
+
+  Future<void> clearHeatCircles({String prefix = 'heat_'}) async {
+    final ids = _circles.keys.where((id) => id.startsWith(prefix)).toList();
+    for (final id in ids) {
+      await removeHeatCircle(id);
+    }
+  }
+
   MapMarkerData? markerBySymbol(Symbol symbol) {
     for (final entry in _symbols.entries) {
       if (entry.value.id == symbol.id) {

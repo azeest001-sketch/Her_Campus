@@ -7,7 +7,12 @@ import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
 import 'admin_dashboard.dart';
+import 'admin_signup_screen.dart';
+import 'college_setup_screen.dart';
+import 'customisable_map_screen.dart';
 import 'student_dashboard.dart';
+import '../services/campus_map_editor_service.dart';
+import '../services/college_service.dart';
 
 /// Dark glass login — backend hooks stay in [AuthService].
 class LoginScreen extends StatefulWidget {
@@ -25,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   var _obscure = true;
   var _loading = false;
+  var _isSignUp = false;
 
   bool get _isAdmin => widget.role == UserRole.admin;
 
@@ -46,14 +52,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _loading = true);
 
-    final result = await AuthService.instance.signIn(
-      role: widget.role,
-      email: _email.text.trim(),
-      password: _password.text,
-    );
+    final AuthSignInResult result;
+    try {
+      if (_isSignUp) {
+        result = await AuthService.instance.signUp(
+          role: widget.role,
+          email: _email.text.trim(),
+          password: _password.text,
+        );
+      } else {
+        result = await AuthService.instance.signIn(
+          role: widget.role,
+          email: _email.text.trim(),
+          password: _password.text,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
 
     if (!mounted) return;
-    setState(() => _loading = false);
+
+    if (result.needsEmailConfirmation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Account created. Confirm your email, then log in.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      setState(() => _isSignUp = false);
+      return;
+    }
 
     if (!result.ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -69,9 +100,16 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final next = _isAdmin
-        ? const AdminDashboard()
-        : const StudentDashboardScreen();
+    final Widget next;
+    if (_isAdmin) {
+      next = const AdminDashboard();
+    } else if (CollegeService.instance.selectedCollege == null) {
+      next = const CollegeSetupScreen(forStudent: true);
+    } else if (!CampusMapEditorService.instance.studentSetupFinished) {
+      next = const CustomisableMapScreen(confirmMode: true);
+    } else {
+      next = const StudentDashboardScreen();
+    }
     await Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => next),
       (_) => false,
@@ -147,9 +185,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _isAdmin
-                              ? 'Sign in with your staff account'
-                              : 'Sign in with your student email',
+                          _isSignUp
+                              ? (_isAdmin
+                                  ? 'Create your staff account'
+                                  : 'Create your student account')
+                              : (_isAdmin
+                                  ? 'Sign in with your staff account'
+                                  : 'Sign in with your student email'),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.figtree(
                             fontSize: 14,
@@ -259,7 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 MainAxisAlignment.center,
                                             children: [
                                               Text(
-                                                'Login',
+                                                _isSignUp ? 'Create account' : 'Login',
                                                 style: GoogleFonts.figtree(
                                                   fontWeight: FontWeight.w800,
                                                   fontSize: 16,
@@ -278,18 +320,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(height: 10),
                                 if (_isAdmin)
                                   TextButton(
-                                    onPressed: () {
-                                      // TODO(backend): sign-up
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Create account — backend pending',
-                                          ),
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                    },
+                                    onPressed: _loading
+                                        ? null
+                                        : () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    const AdminSignUpScreen(),
+                                              ),
+                                            );
+                                          },
                                     child: Text.rich(
                                       TextSpan(
                                         style: GoogleFonts.figtree(
@@ -310,12 +350,35 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   )
                                 else
-                                  Text(
-                                    'Use any email and password to continue in this demo.',
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.figtree(
-                                      color: AppTheme.inkMuted,
-                                      fontSize: 13,
+                                  TextButton(
+                                    onPressed: _loading
+                                        ? null
+                                        : () => setState(
+                                              () => _isSignUp = !_isSignUp,
+                                            ),
+                                    child: Text.rich(
+                                      TextSpan(
+                                        style: GoogleFonts.figtree(
+                                          color: AppTheme.inkMuted,
+                                          fontSize: 14,
+                                        ),
+                                        children: [
+                                          TextSpan(
+                                            text: _isSignUp
+                                                ? 'Already have an account? '
+                                                : 'New student? ',
+                                          ),
+                                          TextSpan(
+                                            text: _isSignUp
+                                                ? 'Log in'
+                                                : 'Create account',
+                                            style: TextStyle(
+                                              color: _accent,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                               ],

@@ -9,7 +9,7 @@ import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
 import 'college_setup_screen.dart';
 
-/// Verifies the code sent to the administrator's college email.
+/// Optional email OTP verification (admin flow prefers password signup).
 class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({
     super.key,
@@ -50,52 +50,82 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
 
     setState(() => _loading = true);
-    final verified = await AuthService.instance.verifyOtp(
-      email: widget.email,
-      code: _code.text,
-    );
+    try {
+      final verified = await AuthService.instance.verifyOtp(
+        email: widget.email,
+        code: _code.text,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (!verified) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('OTP verification is waiting for backend setup'),
-          behavior: SnackBarBehavior.floating,
+      if (!verified) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid or expired code. Try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      final result = await AuthService.instance.signUp(
+        role: UserRole.admin,
+        email: widget.email,
+        password: widget.password,
+        displayName: widget.name,
+      );
+
+      if (!mounted) return;
+
+      if (result.needsEmailConfirmation) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Confirm your email, then log in as admin.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.of(context).pop();
+        return;
+      }
+
+      if (!result.ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Could not finish sign-up'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => const CollegeSetupScreen(),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-
-    // Mockup continues so frontend work can be tested. Backend must only create
-    // the account after a real successful verification.
-    await AuthService.instance.signUp(
-      role: UserRole.admin,
-      email: widget.email,
-      password: widget.password,
-      displayName: widget.name,
-    );
-
-    if (!mounted) return;
-    setState(() => _loading = false);
-
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => const CollegeSetupScreen(),
-      ),
-    );
   }
 
   Future<void> _resend() async {
     setState(() => _resending = true);
-    await AuthService.instance.sendOtp(email: widget.email);
-    if (!mounted) return;
-    setState(() => _resending = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('A new code has been requested'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    try {
+      final result = await AuthService.instance.sendOtp(email: widget.email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.ok
+                ? 'A new code has been requested'
+                : (result.errorMessage ?? 'Could not resend code'),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _resending = false);
+    }
   }
 
   @override

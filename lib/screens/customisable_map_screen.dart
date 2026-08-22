@@ -6,12 +6,19 @@ import '../models/campus_place_model.dart';
 import '../services/campus_map_editor_service.dart';
 import '../services/college_service.dart';
 import '../theme/app_theme.dart';
+import 'college_setup_screen.dart';
+import 'student_dashboard.dart';
 
 enum _MapEditMode { view, drawBorder, addPlace }
 
 /// Admin tool: straight-line campus border, places, and GPS-precise pins.
+///
+/// When [confirmMode] is true (student onboarding), a Confirm map action
+/// finishes setup and opens the student dashboard.
 class CustomisableMapScreen extends StatefulWidget {
-  const CustomisableMapScreen({super.key});
+  const CustomisableMapScreen({super.key, this.confirmMode = false});
+
+  final bool confirmMode;
 
   @override
   State<CustomisableMapScreen> createState() => _CustomisableMapScreenState();
@@ -427,7 +434,13 @@ class _CustomisableMapScreenState extends State<CustomisableMapScreen> {
 
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
+    return PopScope(
+      canPop: !widget.confirmMode,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !widget.confirmMode) return;
+        _onStudentBack();
+      },
+      child: Scaffold(
       // Keep the map from being relaid out when the keyboard opens; the label
       // editor lifts itself above the keyboard instead.
       resizeToAvoidBottomInset: false,
@@ -492,30 +505,90 @@ class _CustomisableMapScreenState extends State<CustomisableMapScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
   Widget _buildActionRow() {
-    if (!_isEditing) return const SizedBox.shrink();
-    return FloatingActionButton.extended(
-      heroTag: 'drop_fab',
-      onPressed: _dropping ? null : _dropAtCenter,
-      backgroundColor: _mode == _MapEditMode.drawBorder
-          ? AppTheme.blue
-          : AppTheme.teal,
-      foregroundColor: Colors.white,
-      icon: _dropping
-          ? const _MiniSpinner()
-          : Icon(
+    final dropFab = _isEditing
+        ? FloatingActionButton.extended(
+            heroTag: 'drop_fab',
+            onPressed: _dropping ? null : _dropAtCenter,
+            backgroundColor: _mode == _MapEditMode.drawBorder
+                ? AppTheme.blue
+                : AppTheme.teal,
+            foregroundColor: Colors.white,
+            icon: _dropping
+                ? const _MiniSpinner()
+                : Icon(
+                    _mode == _MapEditMode.drawBorder
+                        ? Icons.add_location_alt_outlined
+                        : Icons.place_outlined,
+                  ),
+            label: Text(
               _mode == _MapEditMode.drawBorder
-                  ? Icons.add_location_alt_outlined
-                  : Icons.place_outlined,
+                  ? 'Drop corner here'
+                  : 'Pin location here',
             ),
-      label: Text(
-        _mode == _MapEditMode.drawBorder
-            ? 'Drop corner here'
-            : 'Pin location here',
+          )
+        : null;
+
+    if (!widget.confirmMode) {
+      return dropFab ?? const SizedBox.shrink();
+    }
+
+    // Student onboarding: always show Finish so they never need the back arrow.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (dropFab != null) ...[
+          Align(alignment: Alignment.centerRight, child: dropFab),
+          const SizedBox(height: 10),
+        ],
+        SizedBox(
+          height: 52,
+          child: FilledButton.icon(
+            onPressed: _confirmStudentMap,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.pinkSoft,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: const Icon(Icons.check_circle_outline),
+            label: Text(
+              'Finish & go to dashboard',
+              style: GoogleFonts.figtree(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onStudentBack() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => const CollegeSetupScreen(forStudent: true),
       ),
+    );
+  }
+
+  void _confirmStudentMap() {
+    // Auto-close a drawn border so Finish always completes setup.
+    if (_editor.borderPoints.length >= 3) {
+      _editor.confirmStudentMap();
+    } else {
+      _editor.finishStudentSetupWithoutBorder();
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => const StudentDashboardScreen(),
+      ),
+      (_) => false,
     );
   }
 
@@ -614,7 +687,9 @@ class _CustomisableMapScreenState extends State<CustomisableMapScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: widget.confirmMode
+                ? _onStudentBack
+                : () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back_rounded),
             iconSize: 20,
           ),
@@ -623,13 +698,23 @@ class _CustomisableMapScreenState extends State<CustomisableMapScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Customisable Map',
+                  widget.confirmMode
+                      ? 'Confirm campus map'
+                      : 'Customisable Map',
                   style: GoogleFonts.figtree(
                     fontWeight: FontWeight.w800,
                     color: AppTheme.adminInk,
                   ),
                 ),
-                if (_isEditing && !_isNaming)
+                if (widget.confirmMode && !_isEditing && !_isNaming)
+                  Text(
+                    'Close the border, then tap Finish below',
+                    style: GoogleFonts.figtree(
+                      fontSize: 11,
+                      color: AppTheme.adminInkMuted,
+                    ),
+                  )
+                else if (_isEditing && !_isNaming)
                   Text(
                     _mode == _MapEditMode.drawBorder
                         ? 'Aim the + at a corner, then Drop'

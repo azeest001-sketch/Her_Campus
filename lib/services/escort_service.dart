@@ -1,14 +1,16 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/escort_model.dart';
-import 'student_onboarding_service.dart';
+import 'college_service.dart';
+import 'profile_service.dart';
+import 'supabase_service.dart';
 
-/// Mock peer-escort volunteers + student requests.
-///
-/// TODO(backend): persist volunteers, fan-out push/email to first receivers.
+/// Peer-escort volunteers + student requests (Supabase).
 class EscortService extends ChangeNotifier {
   EscortService._();
   static final EscortService instance = EscortService._();
+
+  final _supabase = SupabaseService.instance;
 
   final List<EscortVolunteerModel> _volunteers = [];
   final List<EscortRequestModel> _requests = [];
@@ -19,41 +21,86 @@ class EscortService extends ChangeNotifier {
   int get pendingCount =>
       _requests.where((r) => r.status == EscortRequestStatus.pending).length;
 
+  Future<void> refreshVolunteers() async {
+    if (!_supabase.isReady) return;
+    final rows = await _supabase.client
+        .from('escort_volunteers')
+        .select()
+        .eq('active', true)
+        .order('created_at');
+    _volunteers
+      ..clear()
+      ..addAll(
+        (rows as List).map((r) {
+          final m = Map<String, dynamic>.from(r as Map);
+          return EscortVolunteerModel(
+            email: m['email'] as String,
+            displayName: m['display_name'] as String? ??
+                (m['email'] as String).split('@').first,
+          );
+        }),
+      );
+    notifyListeners();
+  }
+
   Future<void> addVolunteerEmail(String email) async {
-    // TODO(backend): save volunteer allowlist for campus.
+    if (!_supabase.isReady) return;
     final normalized = email.trim().toLowerCase();
     if (normalized.isEmpty || !normalized.contains('@')) return;
-    if (_volunteers.any((v) => v.email == normalized)) return;
 
-    _volunteers.add(
-      EscortVolunteerModel(
-        email: normalized,
-        displayName: StudentOnboardingService.displayNameFromEmail(normalized),
-      ),
-    );
-    notifyListeners();
+    final campus = CollegeService.instance.selectedCollege?.name;
+    await _supabase.client.from('escort_volunteers').upsert({
+      'email': normalized,
+      'display_name': normalized.split('@').first,
+      if (campus != null) 'campus_name': campus,
+      'active': true,
+    }, onConflict: 'email');
+    await refreshVolunteers();
   }
 
   Future<void> removeVolunteer(String email) async {
-    _volunteers.removeWhere((v) => v.email == email.toLowerCase());
-    notifyListeners();
+    if (!_supabase.isReady) return;
+    await _supabase.client
+        .from('escort_volunteers')
+        .update({'active': false}).eq('email', email.toLowerCase());
+    await refreshVolunteers();
   }
 
   Future<EscortRequestModel> requestEscort({
-    required String studentEmail,
     required String destination,
     String note = '',
   }) async {
-    // TODO(backend): create request and notify volunteer emails first.
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (!_supabase.isReady) {
+      throw StateError('Supabase is not connected.');
+    }
+    final uid = ProfileService.instance.currentUserId;
+    if (uid == null) throw StateError('Please log in first.');
+
+    await refreshVolunteers();
+    final volunteer =
+        _volunteers.isNotEmpty ? _volunteers.first.email : null;
+
+    final row = await _supabase.client
+        .from('escort_requests')
+        .insert({
+          'student_id': uid,
+          'destination': destination.trim(),
+          'note': note.trim(),
+          'status': 'pending',
+          if (volunteer != null) 'volunteer_email': volunteer,
+        })
+        .select()
+        .single();
+
     final request = EscortRequestModel(
-      id: 'e-${DateTime.now().millisecondsSinceEpoch}',
-      studentEmail: studentEmail.trim().toLowerCase(),
-      destination: destination.trim(),
-      note: note.trim(),
-      createdAt: DateTime.now(),
-      assignedVolunteerEmail:
-          _volunteers.isNotEmpty ? _volunteers.first.email : null,
+      id: row['id'] as String,
+      studentEmail: _supabase.auth.currentUser?.email ?? '',
+      destination: row['destination'] as String,
+      note: row['note'] as String? ?? '',
+      createdAt: DateTime.tryParse(row['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+      assignedVolunteerEmail: row['volunteer_email'] as String?,
+      status: EscortRequestStatus.pending,
     );
     _requests.insert(0, request);
     notifyListeners();
@@ -64,9 +111,23 @@ class EscortService extends ChangeNotifier {
     String id,
     EscortRequestStatus status,
   ) async {
+    if (!_supabase.isReady) return;
+    await _supabase.client.from('escort_requests').update({
+      'status': status.name,
+    }).eq('id', id);
+
     final index = _requests.indexWhere((r) => r.id == id);
-    if (index < 0) return;
-    _requests[index] = _requests[index].copyWith(status: status);
-    notifyListeners();
+    if (index >= 0) {
+      _requests[index] = _requests[index].copyWith(status: status);
+      notifyListeners();
+    }
+  }
+
+  EscortVolunteerModel? volunteerFor(String? email) {
+    if (email == null) return null;
+    for (final v in _volunteers) {
+      if (v.email == email.toLowerCase()) return v;
+    }
+    return null;
   }
 }

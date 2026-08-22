@@ -14,11 +14,40 @@ class CampusMapEditorService extends ChangeNotifier {
   final List<LatLng> _borderPoints = [];
   final List<CampusPlaceModel> _places = [];
   var _borderClosed = false;
+  var _studentMapConfirmed = false;
+  var _studentSetupFinished = false;
 
   List<LatLng> get borderPoints => List.unmodifiable(_borderPoints);
   List<CampusPlaceModel> get places => List.unmodifiable(_places);
   bool get borderClosed => _borderClosed;
   bool get hasCustomBorder => _borderPoints.length >= 2;
+  bool get hasClosedCustomBorder =>
+      _borderClosed && _borderPoints.length >= 3;
+  bool get studentMapConfirmed => _studentMapConfirmed;
+  /// True after student taps Finish on the map screen.
+  bool get studentSetupFinished => _studentSetupFinished;
+
+  /// Auto-close a drawn border (≥3 points) and mark student map ready.
+  void confirmStudentMap() {
+    if (_borderPoints.length >= 3 && !_borderClosed) {
+      _borderClosed = true;
+    }
+    _studentSetupFinished = true;
+    _studentMapConfirmed = true;
+    notifyListeners();
+  }
+
+  void finishStudentSetupWithoutBorder() {
+    _studentSetupFinished = true;
+    _studentMapConfirmed = true;
+    notifyListeners();
+  }
+
+  void clearStudentMapConfirmation() {
+    _studentMapConfirmed = false;
+    _studentSetupFinished = false;
+    notifyListeners();
+  }
 
   /// Closed outline for drawing (custom border, else college OSM boundary).
   List<LatLng>? get activeBoundary {
