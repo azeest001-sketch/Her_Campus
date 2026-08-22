@@ -1,5 +1,4 @@
 import '../models/user_model.dart';
-import 'student_onboarding_service.dart';
 
 /// Result of a mock / real sign-in attempt.
 class AuthSignInResult {
@@ -21,28 +20,15 @@ class AuthService {
   static final AuthService instance = AuthService._();
 
   /// MOCK: replace with real sign-in (Supabase email/password, etc.).
-  ///
-  /// Students: only emails that an admin invited (allowlist) can sign in.
   Future<AuthSignInResult> signIn({
     required UserRole role,
     required String email,
     required String password,
   }) async {
-    // TODO(backend): authenticate against Supabase / your API and enforce
-    // the invite allowlist on the server — never only in the app.
+    // TODO(backend): authenticate against Supabase / your API.
     await Future<void>.delayed(const Duration(milliseconds: 600));
 
     final normalized = email.trim().toLowerCase();
-
-    if (role == UserRole.student) {
-      final allowed =
-          StudentOnboardingService.instance.isAllowlistedStudent(normalized);
-      if (!allowed) {
-        return const AuthSignInResult.failure(
-          'This email is not invited. Only emails added by an admin can sign in.',
-        );
-      }
-    }
 
     return AuthSignInResult.success(
       UserModel(

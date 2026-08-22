@@ -3,12 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
-import '../services/student_onboarding_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
 import 'admin_dashboard.dart';
-import 'change_password_screen.dart';
 import 'student_dashboard.dart';
 
 /// Dark glass login — backend hooks stay in [AuthService].
@@ -62,33 +60,13 @@ class _LoginScreenState extends State<LoginScreen> {
         SnackBar(
           content: Text(
             result.errorMessage ??
-                (_isAdmin
-                    ? 'Admin login failed'
-                    : 'This email is not invited'),
+                (_isAdmin ? 'Admin login failed' : 'Student login failed'),
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: const Color(0xFF1A1230),
         ),
       );
       return;
-    }
-
-    final user = result.user!;
-
-    // Students who still have a temporary invite password must change it first.
-    if (!_isAdmin && user.email != null) {
-      final mustChange = await StudentOnboardingService.instance
-          .studentMustChangePassword(user.email!);
-      if (!mounted) return;
-      if (mustChange) {
-        await Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute<void>(
-            builder: (_) => ChangePasswordScreen(email: user.email!),
-          ),
-          (_) => false,
-        );
-        return;
-      }
     }
 
     final next = _isAdmin
@@ -171,24 +149,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text(
                           _isAdmin
                               ? 'Sign in with your staff account'
-                              : 'Only emails invited by an admin can sign in',
+                              : 'Sign in with your student email',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.figtree(
                             fontSize: 14,
                             color: AppTheme.inkMuted,
                           ),
                         ),
-                        if (!_isAdmin) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Demo: invite emails in User Onboarding first. Random emails are blocked.',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.figtree(
-                              fontSize: 12,
-                              color: AppTheme.inkMuted,
-                            ),
-                          ),
-                        ],
                         const SizedBox(height: 28),
                         GlassPanel(
                           padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
@@ -344,7 +311,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                 else
                                   Text(
-                                    'Students can’t self-register — wait for an admin invite.',
+                                    'Use any email and password to continue in this demo.',
                                     textAlign: TextAlign.center,
                                     style: GoogleFonts.figtree(
                                       color: AppTheme.inkMuted,

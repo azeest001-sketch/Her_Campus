@@ -12,9 +12,8 @@ import 'floor_calibration_screen.dart';
 import 'heatwave_map_screen.dart';
 import 'peer_escort_volunteers_screen.dart';
 import 'report_inbox_screen.dart';
-import 'user_onboarding_screen.dart';
 
-/// Admin home with six feature tiles. Feature screens are mockups for now.
+/// Admin home with feature tiles. Feature screens are mockups for now.
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
 
@@ -29,7 +28,6 @@ class AdminDashboard extends StatelessWidget {
       Color(0xFF2563EB),
       Color(0xFF1D4ED8),
       Color(0xFF1E40AF),
-      Color(0xFF1E3A8A),
     ];
 
     final features = <_AdminFeature>[
@@ -83,17 +81,6 @@ class AdminDashboard extends StatelessWidget {
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => const HeatwaveMapScreen(),
-          ),
-        ),
-      ),
-      _AdminFeature(
-        title: 'User Onboarding',
-        subtitle: 'Invite students',
-        icon: Icons.person_add_alt_1,
-        color: blues[5],
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => const UserOnboardingScreen(),
           ),
         ),
       ),
@@ -153,7 +140,7 @@ class AdminDashboard extends StatelessWidget {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       const cols = 2;
-                      const rows = 3;
+                      final rows = (features.length + cols - 1) ~/ cols;
                       const gap = 8.0;
                       final tileHeight =
                           (constraints.maxHeight - gap * (rows - 1)) / rows;
