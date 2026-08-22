@@ -1,9 +1,9 @@
 import '../models/college_model.dart';
+import 'profile_service.dart';
 
 /// Temporary in-memory college selection for the frontend mockup.
 ///
-/// Backend teammate: replace [saveCollege] and [loadCollege] with Supabase/API
-/// persistence associated with the administrator's campus.
+/// Also syncs [campus_name] onto the logged-in Supabase profile when set.
 class CollegeService {
   CollegeService._();
   static final CollegeService instance = CollegeService._();
@@ -13,13 +13,11 @@ class CollegeService {
   CollegeModel? get selectedCollege => _selectedCollege;
 
   Future<void> saveCollege(CollegeModel college) async {
-    // TODO(backend): persist college name + latitude/longitude for the campus.
-    await Future<void>.delayed(const Duration(milliseconds: 500));
     _selectedCollege = college;
+    await ProfileService.instance.setCampusName(college.name);
   }
 
   Future<CollegeModel?> loadCollege() async {
-    // TODO(backend): load the campus selected by an administrator.
     return _selectedCollege;
   }
 }

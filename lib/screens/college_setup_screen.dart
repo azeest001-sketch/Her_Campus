@@ -5,14 +5,21 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:team_map/map_kit/map_kit.dart';
 
 import '../models/college_model.dart';
+import '../services/campus_map_editor_service.dart';
 import '../services/college_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 import 'admin_dashboard.dart';
+import 'customisable_map_screen.dart';
 
 /// Admin mockup for choosing the college used by campus map features.
+///
+/// When [forStudent] is true, saving continues to student map confirmation
+/// instead of the admin dashboard.
 class CollegeSetupScreen extends StatefulWidget {
-  const CollegeSetupScreen({super.key});
+  const CollegeSetupScreen({super.key, this.forStudent = false});
+
+  final bool forStudent;
 
   @override
   State<CollegeSetupScreen> createState() => _CollegeSetupScreenState();
@@ -191,13 +198,25 @@ class _CollegeSetupScreenState extends State<CollegeSetupScreen> {
     setState(() => _saving = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'College map saved for this mockup — backend persistence pending',
+          widget.forStudent
+              ? 'College selected — next, confirm your campus map border'
+              : 'College map saved for this mockup — backend persistence pending',
         ),
         behavior: SnackBarBehavior.floating,
       ),
     );
+
+    if (widget.forStudent) {
+      CampusMapEditorService.instance.clearStudentMapConfirmation();
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => const CustomisableMapScreen(confirmMode: true),
+        ),
+      );
+      return;
+    }
 
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
@@ -251,7 +270,7 @@ class _CollegeSetupScreenState extends State<CollegeSetupScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Search for the campus you want students to see.',
+                  'Search for the campus you want to use.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.figtree(
                     fontSize: 14,

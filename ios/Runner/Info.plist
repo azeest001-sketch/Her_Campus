@@ -2,6 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Her Campus needs your location to show you on the campus map and estimate nearby crowd density.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Her Campus needs your location to show you on the campus map and estimate nearby crowd density.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Her Campus uses Bluetooth to estimate how crowded nearby areas are. Device identities are not stored.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Her Campus uses Bluetooth to estimate how crowded nearby areas are. Device identities are not stored.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

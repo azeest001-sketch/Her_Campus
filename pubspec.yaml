@@ -16,6 +16,12 @@ dependencies:
   geolocator: ^14.0.3
   supabase_flutter: ^2.9.0
   flutter_dotenv: ^6.0.1
+  permission_handler: 11.3.1
+  flutter_blue_plus: ^2.3.12
+  wifi_scan: ^0.4.1+2
+  crypto: ^3.0.7
+  uuid: ^4.6.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +30,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Bundles local `.env` so SupabaseService can read SUPABASE_URL / keys at runtime.
+  # `.env` itself stays gitignored; commit only `.env.example`.
+  assets:
+    - .env

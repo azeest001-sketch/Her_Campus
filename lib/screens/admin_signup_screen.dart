@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
-import 'otp_verification_screen.dart';
+import 'college_setup_screen.dart';
 
 /// Admin registration mockup.
 ///
@@ -43,21 +44,50 @@ class _AdminSignUpScreenState extends State<AdminSignUpScreen> {
     setState(() => _loading = true);
 
     final email = _email.text.trim();
-
-    // Backend hook: sends an OTP to the official college email.
-    await AuthService.instance.sendOtp(email: email);
+    AuthSignInResult result;
+    try {
+      // Password signup against Supabase (avoids OTP hang / email provider setup).
+      result = await AuthService.instance.signUp(
+        role: UserRole.admin,
+        email: email,
+        password: _password.text,
+        displayName: _name.text.trim(),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
 
     if (!mounted) return;
-    setState(() => _loading = false);
 
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => OtpVerificationScreen(
-          email: email,
-          name: _name.text.trim(),
-          password: _password.text,
+    if (result.needsEmailConfirmation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Account created. Confirm the email Supabase sent, then log in.',
+          ),
+          behavior: SnackBarBehavior.floating,
         ),
+      );
+      Navigator.of(context).pop();
+      return;
+    }
+
+    if (!result.ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? 'Sign-up failed'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF1A1230),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => const CollegeSetupScreen(),
       ),
+      (_) => false,
     );
   }
 
@@ -122,7 +152,7 @@ class _AdminSignUpScreenState extends State<AdminSignUpScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'We will verify your official college email.',
+                            'Create an admin account with your campus email.',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.figtree(
                               fontSize: 14,
@@ -241,7 +271,7 @@ class _AdminSignUpScreenState extends State<AdminSignUpScreen> {
                                             ),
                                           )
                                         : const Text(
-                                            'Submit for verification',
+                                            'Create admin account',
                                           ),
                                   ),
                                 ],

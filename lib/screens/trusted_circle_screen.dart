@@ -1,299 +1,302 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
+import '../services/profile_service.dart';
+import '../services/trusted_circle_service.dart';
+
+/// Trusted circle: name → signup email → live locations from Supabase.
 class TrustedCircleScreen extends StatefulWidget {
-  const TrustedCircleScreen({Key? key}) : super(key: key);
+  const TrustedCircleScreen({super.key});
 
   @override
   State<TrustedCircleScreen> createState() => _TrustedCircleScreenState();
 }
 
 class _TrustedCircleScreenState extends State<TrustedCircleScreen> {
-  bool _isDark = false;
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
 
-  List<_Contact> _trustedContacts = [
-    _Contact(
-      name: 'Mira Patel',
-      phone: '+91 9876543210',
-      maskedPhone: '+91 98xxxxxx10',
-      liveTag: '🏢 CS Block • Floor 2nd •',
-      isLive: true,
-    ),
-    _Contact(
-      name: 'Rhea Kapoor',
-      phone: '+91 9812345678',
-      maskedPhone: '+91 98xxxxxx78',
-      liveTag: '📚 Library • Floor Ground •',
-      isLive: true,
-    ),
-    _Contact(
-      name: 'Neel Sharma',
-      phone: '+91 9900112233',
-      maskedPhone: '+91 99xxxxxx33',
-      liveTag: null,
-      isLive: false,
-    ),
-    _Contact(
-      name: 'Zara Khan',
-      phone: '+91 9723456789',
-      maskedPhone: '+91 97xxxxxx89',
-      liveTag: null,
-      isLive: false,
-    ),
-  ];
+  var _addStep = 0; // 0 = name, 1 = email
+  var _loading = false;
+  var _refreshing = true;
+  List<TrustedMember> _members = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _bootstrap() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      await ProfileService.instance
+          .updateLocation(lat: pos.latitude, lng: pos.longitude);
+    } catch (_) {}
+    await _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _refreshing = true);
+    try {
+      final list = await TrustedCircleService.instance.listMine();
+      if (!mounted) return;
+      setState(() => _members = list);
+    } catch (e) {
+      if (mounted) _toast('Could not load circle: $e');
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _nextOrAdd() async {
+    if (_addStep == 0) {
+      if (_name.text.trim().isEmpty) {
+        _toast('First enter their name');
+        return;
+      }
+      setState(() => _addStep = 1);
+      return;
+    }
+
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      _toast('Enter the email they used to sign up');
+      return;
+    }
+
+    setState(() => _loading = true);
+    final err = await TrustedCircleService.instance.addByEmail(
+      labelName: _name.text.trim(),
+      email: email,
+    );
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (err != null) {
+      _toast(err);
+      return;
+    }
+
+    _name.clear();
+    _email.clear();
+    setState(() => _addStep = 0);
+    _toast('Added to trusted circle');
+    await _load();
+  }
+
+  Future<void> _remove(TrustedMember m) async {
+    await TrustedCircleService.instance.remove(m.id);
+    await _load();
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = _isDark ? const Color(0xFF080B16) : const Color(0xFFF4F6FF);
-    final cardColor = _isDark ? const Color(0xFF101827) : Colors.white;
-    final accentColor = _isDark ? const Color(0xFF7C3AED) : const Color(0xFF5B21B6);
-    final inputFill = _isDark ? const Color(0xFF161B2E) : const Color(0xFFF2F4FF);
-    final textColor = _isDark ? Colors.white : Colors.black87;
-
-    return Theme(
-      data: ThemeData(
-        brightness: _isDark ? Brightness.dark : Brightness.light,
-        scaffoldBackgroundColor: backgroundColor,
-        colorScheme: ColorScheme.fromSwatch(
-          brightness: _isDark ? Brightness.dark : Brightness.light,
-          accentColor: accentColor,
-        ),
+    const accent = Color(0xFF5B21B6);
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6FF),
+      appBar: AppBar(
+        title: const Text('Trusted Circle'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        ],
       ),
-      child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back, color: textColor),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          'Trusted Circle',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    _addStep == 0
+                        ? 'Step 1 — Who is this person? (name)'
+                        : 'Step 2 — Their signup email',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_addStep == 0)
+                    TextField(
+                      controller: _name,
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) => _nextOrAdd(),
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. Mira (roommate)',
+                        border: OutlineInputBorder(),
+                      ),
+                    )
+                  else
+                    TextField(
+                      controller: _email,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _nextOrAdd(),
+                      decoration: InputDecoration(
+                        hintText: 'friend@college.edu',
+                        border: const OutlineInputBorder(),
+                        prefixText: '${_name.text.trim()} · ',
                       ),
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(_isDark ? Icons.wb_sunny : Icons.nights_stay, color: textColor),
-                          onPressed: () => setState(() => _isDark = !_isDark),
-                        ),
-                        const SizedBox(width: 8),
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: _isDark ? const Color(0xFF1F2937) : const Color(0xFFD8D8FF),
-                          child: Text('AM', style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: inputFill,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _nameController,
-                              decoration: InputDecoration(
-                                hintText: 'Name',
-                                filled: true,
-                                fillColor: _isDark ? const Color(0xFF131827) : Colors.white,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
+                      if (_addStep == 1)
+                        TextButton(
+                          onPressed: () => setState(() => _addStep = 0),
+                          child: const Text('Back'),
+                        ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: _loading ? null : _nextOrAdd,
+                        style:
+                            FilledButton.styleFrom(backgroundColor: accent),
+                        child: _loading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                              ),
-                              style: TextStyle(color: textColor),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _phoneController,
-                              decoration: InputDecoration(
-                                hintText: 'Phone',
-                                filled: true,
-                                fillColor: _isDark ? const Color(0xFF131827) : Colors.white,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                              ),
-                              style: TextStyle(color: textColor),
-                              keyboardType: TextInputType.phone,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: () {},
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF5B21B6),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                padding: const EdgeInsets.symmetric(horizontal: 18),
-                              ),
-                              child: const Text('+ Add', style: TextStyle(fontWeight: FontWeight.w700)),
-                            ),
-                          ),
-                        ],
+                              )
+                            : Text(_addStep == 0 ? 'Next' : 'Add'),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 18),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: ListView.separated(
-                    itemCount: _trustedContacts.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
-                    itemBuilder: (context, index) {
-                      final contact = _trustedContacts[index];
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _isDark ? Colors.black.withOpacity(0.35) : Colors.black12,
-                              blurRadius: 14,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
+            ),
+          ),
+          Expanded(
+            child: _refreshing
+                ? const Center(child: CircularProgressIndicator())
+                : _members.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No trusted contacts yet.\nAdd someone by name, then their signup email.',
+                          textAlign: TextAlign.center,
                         ),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 24,
-                                  backgroundColor: _isDark ? const Color(0xFF2A2E44) : const Color(0xFFEDEBFF),
-                                  child: Text(
-                                    contact.name.substring(0, 1),
-                                    style: TextStyle(color: accentColor, fontWeight: FontWeight.w700, fontSize: 18),
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(contact.name,
-                                          style: TextStyle(
-                                            color: textColor,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                          )),
-                                      const SizedBox(height: 4),
-                                      Text(contact.maskedPhone,
-                                          style: TextStyle(color: _isDark ? Colors.white70 : Colors.black54, fontSize: 13)),
-                                    ],
-                                  ),
-                                ),
-                                if (contact.isLive)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: _isDark ? const Color(0xFF12283A) : const Color(0xFFE6FFFA),
-                                      borderRadius: BorderRadius.circular(12),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+                          itemCount: _members.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, i) {
+                            final m = _members[i];
+                            return Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor:
+                                        accent.withValues(alpha: 0.12),
+                                    child: Text(
+                                      m.labelName.isNotEmpty
+                                          ? m.labelName[0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                        color: accent,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
-                                    child: Row(
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Text('LIVE', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w700, fontSize: 11)),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: const BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Color(0xFF10B981),
+                                        Text(
+                                          m.labelName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
                                           ),
+                                        ),
+                                        Text(
+                                          m.email,
+                                          style: const TextStyle(
+                                            color: Color(0xFF6B7280),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              m.hasLiveLocation
+                                                  ? Icons.my_location
+                                                  : Icons.location_off,
+                                              size: 14,
+                                              color: m.hasLiveLocation
+                                                  ? accent
+                                                  : Colors.grey,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                m.locationLabel,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: m.hasLiveLocation
+                                                      ? accent
+                                                      : Colors.grey,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                   ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (contact.liveTag != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: _isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Text(contact.liveTag!, style: TextStyle(color: textColor.withOpacity(0.85), fontSize: 13)),
+                                  IconButton(
+                                    onPressed: () => _remove(m),
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            const SizedBox(height: 12),
-                            Align(
-                              alignment: Alignment.bottomRight,
-                              child: IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _trustedContacts.removeAt(index);
-                                  });
-                                },
-                                icon: Icon(Icons.delete_outline, color: _isDark ? Colors.white54 : Colors.grey[600]),
-                                tooltip: 'Remove contact',
-                              ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ],
+                      ),
           ),
-        ),
+        ],
       ),
     );
   }
-}
-
-class _Contact {
-  final String name;
-  final String phone;
-  final String maskedPhone;
-  final String? liveTag;
-  final bool isLive;
-
-  _Contact({
-    required this.name,
-    required this.phone,
-    required this.maskedPhone,
-    required this.liveTag,
-    required this.isLive,
-  });
 }

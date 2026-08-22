@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/escort_service.dart';
-import '../services/student_onboarding_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 
@@ -18,6 +17,14 @@ class PeerEscortVolunteersScreen extends StatefulWidget {
 class _PeerEscortVolunteersScreenState extends State<PeerEscortVolunteersScreen> {
   final _email = TextEditingController();
   final _service = EscortService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _service.refreshVolunteers().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -39,11 +46,10 @@ class _PeerEscortVolunteersScreenState extends State<PeerEscortVolunteersScreen>
     await _service.addVolunteerEmail(value);
     _email.clear();
     if (!mounted) return;
+    setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'Added ${StudentOnboardingService.displayNameFromEmail(value)} as first receiver (demo)',
-        ),
+        content: Text('Added $value as peer escort volunteer'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -158,8 +164,10 @@ class _PeerEscortVolunteersScreenState extends State<PeerEscortVolunteersScreen>
                                 ),
                                 subtitle: Text(v.email),
                                 trailing: IconButton(
-                                  onPressed: () =>
-                                      _service.removeVolunteer(v.email),
+                                  onPressed: () async {
+                                    await _service.removeVolunteer(v.email);
+                                    if (mounted) setState(() {});
+                                  },
                                   icon: const Icon(Icons.delete_outline),
                                 ),
                               ),
