@@ -34,8 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool get _isAdmin => widget.role == UserRole.admin;
 
-  Color get _accent =>
-      _isAdmin ? AppTheme.blueSoft : AppTheme.pinkSoft;
+  Color get _accent => AppTheme.pinkSoft;
 
   IconData get _roleIcon =>
       _isAdmin ? Icons.vpn_key_rounded : Icons.school_rounded;

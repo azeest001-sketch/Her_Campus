@@ -95,7 +95,7 @@ class _AdminSignUpScreenState extends State<AdminSignUpScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: CampusBackdrop(
-        roleTint: AppTheme.purple,
+        roleTint: AppTheme.pinkSoft,
         child: SafeArea(
           child: Column(
             children: [

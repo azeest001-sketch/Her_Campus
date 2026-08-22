@@ -8,7 +8,7 @@ import '../widgets/her_campus_logo.dart';
 import 'admin_signup_screen.dart';
 import 'login_screen.dart';
 
-/// Lets an administrator choose between signing in and creating an account.
+/// Admin login / signup choice — same pink–purple look as student auth.
 class AdminAuthChoiceScreen extends StatelessWidget {
   const AdminAuthChoiceScreen({super.key});
 
@@ -22,7 +22,7 @@ class AdminAuthChoiceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: CampusBackdrop(
-        roleTint: AppTheme.blueSoft,
+        roleTint: AppTheme.pinkSoft,
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
@@ -44,9 +44,9 @@ class AdminAuthChoiceScreen extends StatelessWidget {
                 Text(
                   'Admin access',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.cormorantGaramond(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w600,
+                  style: GoogleFonts.figtree(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
                     color: AppTheme.ink,
                   ),
                 ),
@@ -64,7 +64,7 @@ class AdminAuthChoiceScreen extends StatelessWidget {
                   icon: Icons.login_rounded,
                   title: 'Log in',
                   description: 'I already have an admin account',
-                  color: AppTheme.blueSoft,
+                  color: AppTheme.pinkSoft,
                   onTap: () => _open(
                     context,
                     const LoginScreen(role: UserRole.admin),
@@ -120,14 +120,32 @@ class _AuthOption extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(26),
-        child: GlassPanel(
-          borderRadius: 26,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
           child: Row(
             children: [
-              GlassIconOrb(icon: icon, color: color, size: 58),
-              const SizedBox(width: 18),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,10 +169,7 @@ class _AuthOption extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                Icons.arrow_forward_rounded,
-                color: color,
-              ),
+              Icon(Icons.chevron_right, color: color),
             ],
           ),
         ),
