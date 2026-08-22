@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/student_onboarding_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
-import 'home_screen.dart';
+import 'student_dashboard.dart';
 
 /// Forced password change after a student signs in with a temporary password.
 class ChangePasswordScreen extends StatefulWidget {
@@ -50,7 +50,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     await Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(
-        builder: (_) => HomeScreen(studentEmail: widget.email),
+        builder: (_) => const StudentDashboardScreen(),
       ),
       (_) => false,
     );

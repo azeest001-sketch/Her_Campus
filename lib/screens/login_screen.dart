@@ -9,7 +9,7 @@ import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
 import 'admin_dashboard.dart';
 import 'change_password_screen.dart';
-import 'home_screen.dart';
+import 'student_dashboard.dart';
 
 /// Dark glass login — backend hooks stay in [AuthService].
 class LoginScreen extends StatefulWidget {
@@ -93,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final next = _isAdmin
         ? const AdminDashboard()
-        : HomeScreen(studentEmail: user.email ?? _email.text.trim());
+        : const StudentDashboardScreen();
     await Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => next),
       (_) => false,
