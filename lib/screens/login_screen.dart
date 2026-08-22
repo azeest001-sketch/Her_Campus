@@ -3,9 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/student_onboarding_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
+import 'admin_dashboard.dart';
+import 'change_password_screen.dart';
+import 'home_screen.dart';
 
 /// Dark glass login — backend hooks stay in [AuthService].
 class LoginScreen extends StatefulWidget {
@@ -44,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _loading = true);
 
-    final user = await AuthService.instance.signIn(
+    final result = await AuthService.instance.signIn(
       role: widget.role,
       email: _email.text.trim(),
       password: _password.text,
@@ -53,13 +57,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _loading = false);
 
-    if (user == null) {
+    if (!result.ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _isAdmin
-                ? 'Admin login ready — waiting on backend auth'
-                : 'Student login ready — waiting on backend auth',
+            result.errorMessage ??
+                (_isAdmin
+                    ? 'Admin login failed'
+                    : 'This email is not invited'),
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: const Color(0xFF1A1230),
@@ -68,7 +73,31 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // TODO(frontend+backend): navigate after real auth succeeds.
+    final user = result.user!;
+
+    // Students who still have a temporary invite password must change it first.
+    if (!_isAdmin && user.email != null) {
+      final mustChange = await StudentOnboardingService.instance
+          .studentMustChangePassword(user.email!);
+      if (!mounted) return;
+      if (mustChange) {
+        await Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(
+            builder: (_) => ChangePasswordScreen(email: user.email!),
+          ),
+          (_) => false,
+        );
+        return;
+      }
+    }
+
+    final next = _isAdmin
+        ? const AdminDashboard()
+        : HomeScreen(studentEmail: user.email ?? _email.text.trim());
+    await Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => next),
+      (_) => false,
+    );
   }
 
   @override
@@ -142,13 +171,24 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text(
                           _isAdmin
                               ? 'Sign in with your staff account'
-                              : 'Sign in with your student email',
+                              : 'Only emails invited by an admin can sign in',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.figtree(
                             fontSize: 14,
                             color: AppTheme.inkMuted,
                           ),
                         ),
+                        if (!_isAdmin) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Demo: invite emails in User Onboarding first. Random emails are blocked.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.figtree(
+                              fontSize: 12,
+                              color: AppTheme.inkMuted,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 28),
                         GlassPanel(
                           padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
@@ -269,37 +309,48 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
-                                TextButton(
-                                  onPressed: () {
-                                    // TODO(backend): sign-up
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Create account — backend pending',
-                                        ),
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
-                                  },
-                                  child: Text.rich(
-                                    TextSpan(
-                                      style: GoogleFonts.figtree(
-                                        color: AppTheme.inkMuted,
-                                        fontSize: 14,
-                                      ),
-                                      children: [
-                                        const TextSpan(text: 'New here? '),
-                                        TextSpan(
-                                          text: 'Create account',
-                                          style: TextStyle(
-                                            color: _accent,
-                                            fontWeight: FontWeight.w800,
+                                if (_isAdmin)
+                                  TextButton(
+                                    onPressed: () {
+                                      // TODO(backend): sign-up
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Create account — backend pending',
                                           ),
+                                          behavior: SnackBarBehavior.floating,
                                         ),
-                                      ],
+                                      );
+                                    },
+                                    child: Text.rich(
+                                      TextSpan(
+                                        style: GoogleFonts.figtree(
+                                          color: AppTheme.inkMuted,
+                                          fontSize: 14,
+                                        ),
+                                        children: [
+                                          const TextSpan(text: 'New here? '),
+                                          TextSpan(
+                                            text: 'Create account',
+                                            style: TextStyle(
+                                              color: _accent,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Text(
+                                    'Students can’t self-register — wait for an admin invite.',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.figtree(
+                                      color: AppTheme.inkMuted,
+                                      fontSize: 13,
                                     ),
                                   ),
-                                ),
                               ],
                             ),
                           ),

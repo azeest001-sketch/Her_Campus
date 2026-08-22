@@ -1,7 +1,9 @@
 import 'dart:collection';
+import 'dart:math' show Point;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Offset;
+import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'models/map_marker_data.dart';
@@ -18,18 +20,23 @@ class TeamMapController {
   TeamMapController(
     this._map, {
     LatLng fallbackCenter = const LatLng(28.6139, 77.2090),
+    double fallbackZoom = 12,
   }) {
     _fallbackCenter = fallbackCenter;
+    _fallbackZoom = fallbackZoom;
   }
 
   final MapLibreMapController _map;
   late LatLng _fallbackCenter;
+  late double _fallbackZoom;
 
   OpenFreeMapStyle _style = OpenFreeMapStyle.liberty;
   bool _is3d = false;
   bool _buildings3dAdded = false;
+  var _symbolOverlapReady = false;
 
   final Map<String, Symbol> _symbols = {};
+  final Map<String, Circle> _circles = {};
   final Map<String, MapMarkerData> _markers = {};
   final Map<String, Line> _lines = {};
   final Map<String, Fill> _fills = {};
@@ -51,10 +58,8 @@ class TeamMapController {
   Future<void> setStyle(OpenFreeMapStyle style) async {
     _style = style;
     _buildings3dAdded = false;
-    _symbols.clear();
-    _markers.clear();
-    _lines.clear();
-    _fills.clear();
+    _symbolOverlapReady = false;
+    resetAnnotationCache();
     await _map.setStyle(style.url);
   }
 
@@ -70,7 +75,15 @@ class TeamMapController {
       _fallbackCenter = tracked.target;
       return tracked;
     }
-    return CameraPosition(target: _fallbackCenter, zoom: 13);
+    return CameraPosition(target: _fallbackCenter, zoom: _fallbackZoom);
+  }
+
+  /// Current map center (camera target). Safe for drop-pin / draw tools.
+  LatLng get cameraCenter => _currentCamera().target;
+
+  /// Convert a local map-widget pixel to lat/lng.
+  Future<LatLng> toLatLng(Offset localOffset) {
+    return _map.toLatLng(Point(localOffset.dx, localOffset.dy));
   }
 
   Future<void> flyTo(
@@ -125,6 +138,7 @@ class TeamMapController {
   Future<void> enable3d({
     double tilt = 55,
     double bearing = -20,
+    Duration duration = const Duration(milliseconds: 900),
   }) async {
     try {
       await _ensure3dBuildings();
@@ -139,7 +153,7 @@ class TeamMapController {
             tilt: tilt,
           ),
         ),
-        duration: const Duration(milliseconds: 900),
+        duration: duration,
       );
       // Extra nudge — some web builds ignore pitch inside combined flyTo.
       await _map.animateCamera(CameraUpdate.tiltTo(tilt));
@@ -257,19 +271,29 @@ class TeamMapController {
 
   // ── Markers ────────────────────────────────────────────────────────────
 
+  /// Drops a pin with its name drawn *into the image*.
+  ///
+  /// MapLibre symbol text uses Open Sans / Arial Unicode, which OpenFreeMap
+  /// does not ship — so a `textField` label is silently blank. Circles draw a
+  /// dot but cannot carry text. Baking the name into a PNG and using that as
+  /// `icon-image` is the one path that actually shows "Library" on the map.
   Future<void> addMarker(MapMarkerData marker) async {
     await removeMarker(marker.id);
+
+    final imageId = 'team_pin_${marker.id}';
+    final bytes = await paintMarkerPinPng(
+      title: marker.title,
+      fillHex: marker.iconColor ?? '#2563EB',
+      iconSize: marker.iconSize,
+    );
+    await _map.addImage(imageId, bytes);
+
     final symbol = await _map.addSymbol(
       SymbolOptions(
         geometry: marker.position,
-        iconImage: marker.iconImage,
-        iconSize: marker.iconSize,
-        iconColor: marker.iconColor,
-        textField: marker.title,
-        textOffset: marker.title == null ? null : const Offset(0, 1.4),
-        textSize: 12,
-        textHaloColor: '#FFFFFF',
-        textHaloWidth: 1.2,
+        iconImage: imageId,
+        iconSize: 1,
+        iconAnchor: 'top',
       ),
       {
         'markerId': marker.id,
@@ -278,6 +302,35 @@ class TeamMapController {
     );
     _symbols[marker.id] = symbol;
     _markers[marker.id] = marker;
+
+    await _ensureSymbolOverlap();
+  }
+
+  Future<void> _ensureSymbolOverlap() async {
+    if (_symbolOverlapReady) return;
+    _symbolOverlapReady = true;
+    try {
+      await _map.setSymbolIconAllowOverlap(true);
+      await _map.setSymbolIconIgnorePlacement(true);
+      await _map.setSymbolTextAllowOverlap(true);
+      await _map.setSymbolTextIgnorePlacement(true);
+    } catch (error) {
+      debugPrint('Symbol overlap flags skipped: $error');
+    }
+  }
+
+  /// Forgets cached annotation handles.
+  ///
+  /// MapLibre destroys every annotation when the style reloads or the platform
+  /// view is recreated, so the cached handles are dangling at that point and
+  /// removing them would throw.
+  void resetAnnotationCache() {
+    _symbols.clear();
+    _circles.clear();
+    _markers.clear();
+    _lines.clear();
+    _fills.clear();
+    _symbolOverlapReady = false;
   }
 
   Future<void> addMarkers(Iterable<MapMarkerData> markers) async {
@@ -288,9 +341,24 @@ class TeamMapController {
 
   Future<void> removeMarker(String id) async {
     final symbol = _symbols.remove(id);
+    final circle = _circles.remove(id);
     _markers.remove(id);
+
+    // Handles go stale after a style reload; the cache entries are already
+    // dropped above, so a failure here is safe to ignore.
+    if (circle != null) {
+      try {
+        await _map.removeCircle(circle);
+      } catch (error) {
+        debugPrint('removeMarker($id) circle ignored: $error');
+      }
+    }
     if (symbol != null) {
-      await _map.removeSymbol(symbol);
+      try {
+        await _map.removeSymbol(symbol);
+      } catch (error) {
+        debugPrint('removeMarker($id) label ignored: $error');
+      }
     }
   }
 
@@ -311,6 +379,33 @@ class TeamMapController {
   }
 
   // ── Lines & polygons (routes, zones, …) ────────────────────────────────
+
+  /// Soft fill + bold outline so campus edges are easy to see.
+  Future<void> showCampusBoundary({
+    required List<LatLng> outline,
+    String id = 'campus_boundary',
+    String fillColor = '#3B82F6',
+    double fillOpacity = 0.14,
+    String strokeColor = '#1D4ED8',
+    double strokeWidth = 3.5,
+  }) async {
+    if (outline.length < 3) return;
+    await addPolygon(
+      id: id,
+      outline: outline,
+      fillColor: fillColor,
+      fillOpacity: fillOpacity,
+      strokeColor: strokeColor,
+      strokeWidth: strokeWidth,
+    );
+    await addPolyline(
+      id: '${id}_stroke',
+      points: outline,
+      color: strokeColor,
+      width: strokeWidth,
+      opacity: 0.95,
+    );
+  }
 
   Future<String> addPolyline({
     required String id,
@@ -334,8 +429,11 @@ class TeamMapController {
 
   Future<void> removePolyline(String id) async {
     final line = _lines.remove(id);
-    if (line != null) {
+    if (line == null) return;
+    try {
       await _map.removeLine(line);
+    } catch (error) {
+      debugPrint('removePolyline($id) ignored: $error');
     }
   }
 
@@ -364,8 +462,11 @@ class TeamMapController {
 
   Future<void> removePolygon(String id) async {
     final fill = _fills.remove(id);
-    if (fill != null) {
+    if (fill == null) return;
+    try {
       await _map.removeFill(fill);
+    } catch (error) {
+      debugPrint('removePolygon($id) ignored: $error');
     }
   }
 
@@ -373,6 +474,27 @@ class TeamMapController {
 
   Future<void> addImage(String name, Uint8List bytes) async {
     await _map.addImage(name, bytes);
+  }
+
+  /// Hides OpenFreeMap place / POI names (e.g. the college title printed
+  /// by the base map) so only admin-placed labels remain.
+  Future<void> hideBasemapPlaceLabels() async {
+    const layerIds = [
+      'poi_r20',
+      'poi_r7',
+      'poi_r1',
+      'poi_transit',
+      'label_other',
+      'label_village',
+      'label_town',
+    ];
+    for (final id in layerIds) {
+      try {
+        await _map.setLayerVisibility(id, false);
+      } catch (error) {
+        debugPrint('hideBasemapPlaceLabels($id) skipped: $error');
+      }
+    }
   }
 
   // ── Internal wiring from TeamMap ───────────────────────────────────────
@@ -383,16 +505,21 @@ class TeamMapController {
   }
 
   Future<void> onStyleLoaded({required bool startIn3d}) async {
+    // A style (re)load destroys every annotation, so previously cached handles
+    // are dangling. Callers repaint from their own state after this.
+    resetAnnotationCache();
+    _buildings3dAdded = false;
+
     // Web (MapLibre GL JS v5) may ignore initialCameraPosition when the style
     // JSON defines center/zoom — re-apply our fallback once.
-    final tracked = _map.cameraPosition;
-    if (tracked == null) {
-      await _map.moveCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: _fallbackCenter, zoom: 13),
+    await _map.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _fallbackCenter,
+          zoom: _fallbackZoom,
         ),
-      );
-    }
+      ),
+    );
 
     if (startIn3d) {
       await enable3d();
@@ -403,6 +530,104 @@ class TeamMapController {
     final marker = markerBySymbol(symbol);
     if (marker != null) {
       onMarkerTapped?.call(marker);
+      // Markers used to swallow map clicks; still report a map tap so drawing
+      // / labeling keep working when the user taps near an existing pin.
+      onMapTapped?.call(marker.position);
     }
   }
+}
+
+/// Raster pins are drawn at 3× so they stay sharp on phone screens.
+const kMarkerPinPixelRatio = 3.0;
+
+Color _colorFromHex(String hex) {
+  var value = hex.replaceAll('#', '');
+  if (value.length == 6) value = 'FF$value';
+  return Color(int.parse(value, radix: 16));
+}
+
+/// Coloured dot + name chip, as PNG bytes. Used as a MapLibre `icon-image`
+/// so the label does not depend on the style's glyph fonts.
+Future<Uint8List> paintMarkerPinPng({
+  required String? title,
+  required String fillHex,
+  required double iconSize,
+}) async {
+  final radius = 8.0 * iconSize;
+  final titleText = title?.trim();
+  final hasTitle = titleText != null && titleText.isNotEmpty;
+
+  TextPainter? textPainter;
+  if (hasTitle) {
+    textPainter = TextPainter(
+      text: TextSpan(
+        text: titleText,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF14293A),
+          height: 1.15,
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+      maxLines: 2,
+      ellipsis: '…',
+    )..layout(maxWidth: 280);
+  }
+
+  const chipPadH = 10.0;
+  const chipPadV = 6.0;
+  final chipW = hasTitle ? textPainter!.width + chipPadH * 2 : 0.0;
+  final chipH = hasTitle ? textPainter!.height + chipPadV * 2 : 0.0;
+  const gap = 5.0;
+  final dotExtent = radius * 2 + 6;
+  final logicalW = hasTitle && chipW > dotExtent ? chipW : dotExtent;
+  final logicalH = dotExtent + (hasTitle ? gap + chipH : 0);
+
+  final widthPx = (logicalW * kMarkerPinPixelRatio).ceil();
+  final heightPx = (logicalH * kMarkerPinPixelRatio).ceil();
+
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  canvas.scale(kMarkerPinPixelRatio);
+
+  final fill = _colorFromHex(fillHex);
+  final cx = logicalW / 2;
+  final cy = radius + 3;
+
+  canvas.drawCircle(
+    Offset(cx, cy),
+    radius + 2.4,
+    Paint()..color = Colors.white,
+  );
+  canvas.drawCircle(Offset(cx, cy), radius, Paint()..color = fill);
+
+  if (hasTitle && textPainter != null) {
+    final chipTop = dotExtent + gap;
+    final chipRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(cx, chipTop + chipH / 2),
+        width: chipW,
+        height: chipH,
+      ),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(chipRect, Paint()..color = Colors.white);
+    canvas.drawRRect(
+      chipRect,
+      Paint()
+        ..color = const Color(0x33000000)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.7,
+    );
+    textPainter.paint(
+      canvas,
+      Offset(cx - textPainter.width / 2, chipTop + chipPadV),
+    );
+  }
+
+  final image = await recorder.endRecording().toImage(widthPx, heightPx);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  return bytes!.buffer.asUint8List();
 }

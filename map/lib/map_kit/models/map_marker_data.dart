@@ -7,7 +7,7 @@ class MapMarkerData {
     required this.position,
     this.title,
     this.snippet,
-    this.iconImage = 'marker-15',
+    this.iconImage = 'marker',
     this.iconSize = 1.2,
     this.iconColor,
     this.data,
@@ -20,12 +20,18 @@ class MapMarkerData {
   final String? title;
   final String? snippet;
 
-  /// Built-in sprite name from the OpenFreeMap / MapLibre style, or a custom
-  /// image you registered with [TeamMapController.addImage].
+  /// Sprite name, only used if you draw the symbol yourself via
+  /// `TeamMapController.raw`.
+  ///
+  /// [TeamMapController.addMarker] ignores this and draws a circle instead,
+  /// because sprite names vary per style and a missing one makes MapLibre drop
+  /// the whole symbol, label included.
   final String iconImage;
+
+  /// Scales the pin dot (1.0 ≈ 7px radius).
   final double iconSize;
 
-  /// Optional tint, e.g. `#E53935`.
+  /// Pin fill colour, e.g. `#E53935`.
   final String? iconColor;
 
   /// Arbitrary payload for your feature (route stop, shop id, …).

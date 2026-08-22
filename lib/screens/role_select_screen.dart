@@ -7,6 +7,7 @@ import '../models/user_model.dart';
 import '../theme/app_theme.dart';
 import '../widgets/campus_backdrop.dart';
 import '../widgets/her_campus_logo.dart';
+import 'admin_auth_choice_screen.dart';
 import 'login_screen.dart';
 
 /// Dark glass role chooser — pink / purple / blue glow backdrop.
@@ -44,11 +45,13 @@ class _RoleSelectScreenState extends State<RoleSelectScreen>
     super.dispose();
   }
 
-  void _openLogin(UserRole role) {
+  void _openRole(UserRole role) {
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 380),
-        pageBuilder: (_, animation, __) => LoginScreen(role: role),
+        pageBuilder: (_, animation, __) => role == UserRole.admin
+            ? const AdminAuthChoiceScreen()
+            : const LoginScreen(role: UserRole.student),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(
             opacity: animation,
@@ -133,7 +136,7 @@ class _RoleSelectScreenState extends State<RoleSelectScreen>
                             title: 'ADMIN',
                             icon: Icons.vpn_key_rounded,
                             accent: AppTheme.blueSoft,
-                            onTap: () => _openLogin(UserRole.admin),
+                            onTap: () => _openRole(UserRole.admin),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -142,12 +145,12 @@ class _RoleSelectScreenState extends State<RoleSelectScreen>
                             title: 'STUDENT',
                             icon: Icons.school_rounded,
                             accent: AppTheme.pinkSoft,
-                            onTap: () => _openLogin(UserRole.student),
+                            onTap: () => _openRole(UserRole.student),
                           ),
                         ),
                       ],
                     ),
-                    const Spacer(flex: 2),
+                    const Spacer(flex: 1),
                     Text(
                       'You can switch roles after signing in',
                       textAlign: TextAlign.center,

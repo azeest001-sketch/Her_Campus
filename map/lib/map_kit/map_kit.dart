@@ -18,6 +18,7 @@ export 'package:maplibre_gl/maplibre_gl.dart'
         MapLibreMapController,
         MinMaxZoomPreference;
 
+export 'campus_boundary.dart';
 export 'models/map_config.dart';
 export 'models/map_marker_data.dart';
 export 'open_free_map_styles.dart';

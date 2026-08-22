@@ -14,6 +14,12 @@ class AppTheme {
   static const Color purpleDeep = Color(0xFF7353B8);
   static const Color blue = Color(0xFF4F91DB);
   static const Color blueSoft = Color(0xFF68A5E8);
+  static const Color teal = Color(0xFF2FA8A0);
+  static const Color tealSoft = Color(0xFF5BC4BB);
+  static const Color tealDeep = Color(0xFF1F7F7A);
+  static const Color adminInk = Color(0xFF1A3344);
+  static const Color adminInkMuted = Color(0xFF5A7384);
+  static const Color adminWash = Color(0xFFF3FAFC);
 
   static const Color ink = Color(0xFF2C2440);
   static const Color inkMuted = Color(0xFF746B87);

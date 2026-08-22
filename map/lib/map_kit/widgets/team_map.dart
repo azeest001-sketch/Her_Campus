@@ -32,6 +32,19 @@ class TeamMap extends StatefulWidget {
   final Widget Function(BuildContext context, TeamMapController controller)?
       overlayBuilder;
 
+  static var _platformConfigured = false;
+
+  /// Puts the Android platform view into Hybrid Composition.
+  ///
+  /// `maplibre_gl` still defaults to the legacy Virtual Display mode, which
+  /// renders the map black and drops text input whenever a dialog, bottom sheet
+  /// or keyboard is shown over it. Runs once, before the first map is built.
+  static void ensurePlatformConfigured() {
+    if (_platformConfigured) return;
+    _platformConfigured = true;
+    MapLibreMap.useHybridComposition = true;
+  }
+
   @override
   State<TeamMap> createState() => _TeamMapState();
 }
@@ -39,6 +52,12 @@ class TeamMap extends StatefulWidget {
 class _TeamMapState extends State<TeamMap> {
   TeamMapController? _controller;
   var _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    TeamMap.ensurePlatformConfigured();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +75,17 @@ class _TeamMapState extends State<TeamMap> {
           tiltGesturesEnabled: widget.config.tiltGesturesEnabled,
           rotateGesturesEnabled: widget.config.rotateGesturesEnabled,
           myLocationEnabled: widget.config.myLocationEnabled,
+          // Without this, tapping fills/lines/markers never fires onMapClick —
+          // which breaks border drawing over campus polygons.
+          featureTapsTriggersMapClick: true,
+          // Later entries draw on top. The default puts fills last, so a campus
+          // boundary would cover its own pins.
+          annotationOrder: const [
+            AnnotationType.fill,
+            AnnotationType.line,
+            AnnotationType.circle,
+            AnnotationType.symbol,
+          ],
           trackCameraPosition: true,
           onMapCreated: _onMapCreated,
           onStyleLoadedCallback: _onStyleLoaded,
@@ -78,6 +108,7 @@ class _TeamMapState extends State<TeamMap> {
     final team = TeamMapController(
       mapController,
       fallbackCenter: widget.config.initialCenter,
+      fallbackZoom: widget.config.initialZoom,
     );
     team.bindStyle(
       widget.config.style,
